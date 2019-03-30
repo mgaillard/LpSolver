@@ -1,4 +1,5 @@
-include("lp_solver.jl")
+push!(LOAD_PATH, "./")
+import HPCGLpSolver
 
 # Problem definition
 c = [-1.0; -2.0]
