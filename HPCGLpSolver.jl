@@ -16,7 +16,7 @@ mutable struct IplpProblem
      hi::Vector{Float64}
  end
  
- mutable struct IplpSolution
+mutable struct IplpSolution
      # Solution vector
      x::Vector{Float64}
      # A true/false flag indicating convergence or not
@@ -137,12 +137,12 @@ function iplp(problem::IplpProblem, tolerance::Float64)
      sigma = 0.5
      max_iterations = 100
      tau = 10.0
-
-     # TODO: convert the problem into standard form
+     
      # TODO: check if unbound
-     cs = [problem.c; 0.0; 0.0; 0.0]
-     x = zeros(length(problem.c))
-     As = [problem.A Matrix{Float64}(I, 3, 3)]
+     m, n = size(problem.A)
+     cs = [problem.c; zeros(m)]
+     x = zeros(n)
+     As = [problem.A Matrix{Float64}(I, m, m)]
      bs = problem.b
 
      # TODO: Find the starting point without relying on another solver
