@@ -58,8 +58,8 @@ end
 
 We still rely on an external LP solver to find a starting point, we would need to find an alternative solution for that.
 
-Although we did not encounter accuracy problem yet, we would need a more robust algorithm.
+Although we did not encounter accuracy problem and terribly ill matrix yet, we would need a more robust algorithm to deal with those bad situations.
 
 We could implement the Mehrotra's Predictor-Corrector Algorithm as it seems to be a well-established method.
 
-Right now, we do not check if the problem is unbound in the opposite of the gradient direction. When that happens, our algorithm is stuck in an infinite loop and never converge. We don't know yet a method to test that.
+Right now, we do not check if the problem is unbound in the opposite of the gradient direction. When that happens, our algorithm will run optimization process in max allowed steps and return a value that does not satisfy KKT condition. We don't know yet a method to test that.
