@@ -133,24 +133,63 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
      return p_sol
 end
 
+"""
+soln = iplp(Problem,tol) solves the linear program:
+
+   minimize c'*x where Ax = b and lo <= x <= hi
+
+where the variables are stored in the following struct:
+
+   Problem.A
+   Problem.c
+   Problem.b   
+   Problem.lo
+   Problem.hi
+
+and the IplpSolution contains fields
+
+  [x,flag,cs,As,bs,xs,lam,s]
+
+which are interpreted as   
+a flag indicating whether or not the
+solution succeeded (flag = true => success and flag = false => failure),
+
+along with the solution for the problem converted to standard form (xs):
+
+  minimize cs'*xs where As*xs = bs and 0 <= xs
+
+and the associated Lagrange multipliers (lam, s).
+
+This solves the problem up to 
+the duality measure (xs'*s)/n <= tol and the normalized residual
+norm([As'*lam + s - cs; As*xs - bs; xs.*s])/norm([bs;cs]) <= tol
+and fails if this takes more than maxit iterations.
+"""
 function iplp(problem::IplpProblem, tolerance::Float64)
      sigma = 0.5
      max_iterations = 100
      tau = 10.0
-     
+
      # TODO: check if unbound
+     # Convert to standard form
      m, n = size(problem.A)
-     cs = [problem.c; zeros(m)]
-     x = zeros(n)
-     As = [problem.A Matrix{Float64}(I, m, m)]
-     bs = problem.b
+     cs = [problem.c; zeros(n)]
+     x = zeros(2 * n)
+     As = [problem.A zeros(m, n);
+           Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
+     bs = [problem.b - problem.A * problem.lo;
+           problem.hi - problem.lo]
 
      # TODO: Find the starting point without relying on another solver
-     xs, lam, s = find_starting_point(cs, As, problem.b, tau)
+     xs, lam, s = find_starting_point(cs, As, bs, tau)
 
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
+     
+     # shifted solution by lo, needs to shift it back
+     shifted_solution = interior_point_method(initial_solution, sigma, tolerance, max_iterations)
+     shifted_solution.x[1:n] += problem.lo
 
-     return interior_point_method(initial_solution, sigma, tolerance, max_iterations)
+     return shifted_solution
 end
 
 export IplpProblem
