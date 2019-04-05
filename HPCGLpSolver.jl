@@ -1,16 +1,15 @@
 module HPCGLpSolver
 
 using Convex
-# TODO: Remove this dependency
-using ECOS
 using Plots
 using LinearAlgebra
 using SparseArrays
 
+const Infinity = 1.0e308
+
 mutable struct IplpProblem
      c::Vector{Float64}
-     # A::SparseMatrixCSC{Float64} 
-     A::Matrix{Float64} # TODO: use SparseMatrixCSC instead
+     A::SparseMatrixCSC{Float64}
      b::Vector{Float64}
      lo::Vector{Float64}
      hi::Vector{Float64}
@@ -24,8 +23,7 @@ mutable struct IplpSolution
      # The objective vector in standard form
      cs::Vector{Float64}
      # The constraint matrix in standard form
-     # As::SparseMatrixCSC{Float64}
-     As::Matrix{Float64} # TODO: use SparseMatrixCSC instead
+     As::SparseMatrixCSC{Float64}
      # The right hand side (b) in standard form
      bs::Vector{Float64}
      # The solution in standard form
@@ -36,14 +34,14 @@ mutable struct IplpSolution
      s::Vector{Float64}
  end
 
-# Solve the central-path problem for interior point methods.
-function ip_central(c, A, b, tau)
-    x = Variable(length(c))
-    p = minimize(c'*x - tau*sum(log(x)))
-    p.constraints += A*x == b
-    p.constraints += x .>= 0
-    solve!(p, ECOSSolver(verbose=false))
-    return vec(x.value), p
+# Compute the residual of the KKT condition Ax = b
+function residual_c(p_sol::IplpSolution)
+     return p_sol.s + p_sol.As' * p_sol.lam .- p_sol.cs
+end
+
+# Compute the residual of the KKT condition A'lam + s = c
+function residual_b(p_sol::IplpSolution)
+     return p_sol.As * p_sol.xs .- p_sol.bs
 end
 
 function compute_direction(p_sol::IplpSolution, sigma)
@@ -59,8 +57,8 @@ function compute_direction(p_sol::IplpSolution, sigma)
      mu = dot(p_sol.xs, p_sol.s)/n
 
      # We want to find the zero of this function
-     Fc = [p_sol.s + p_sol.As' * p_sol.lam .- p_sol.cs;
-           p_sol.As * p_sol.xs .- p_sol.bs;
+     Fc = [residual_c(p_sol);
+           residual_b(p_sol); 
            p_sol.xs .* p_sol.s .- sigma * mu]
 
      # Newton method: Direction in which we perform the line search
@@ -85,29 +83,33 @@ function pick_alpha(x, lambda, s, dx, dlambda, ds)
      return alpha
 end
 
-# Find a starting point
-function find_starting_point(c, A, b, tau)
-     x, prob = ip_central(c, A, b, tau)
-     lambda = vec(prob.constraints[1].dual)
-     s = tau./x
-     return x, lambda, s
-end
-
 function check_end_condition(p_sol::IplpSolution, sigma::Float64, tolerance::Float64)
      # Compute the duality measure
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      # Compute the normalized residual
-     Fc = [p_sol.s + p_sol.As' * p_sol.lam .- p_sol.cs;
-           p_sol.As * p_sol.xs .- p_sol.bs]
-     residual = norm([Fc[1]; Fc[2]]) / norm([p_sol.bs; p_sol.s])
+     residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
      # End condition
      return (all(mu .<= tolerance) && residual <= tolerance)
+end
+
+function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
+     println("Feasibility diagnostic")
+     println("x > 0: ", all(p_sol.xs .> 0))
+     println("s > 0: ", all(p_sol.s .> 0))
+     println("Norm of residual_c: ", norm(residual_c(p_sol)))
+     println("Norm of residual_b: ", norm(residual_b(p_sol)))
+     residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+     println("Norm of residual: ", residual)
+     println("Tolerance test for residual: ", residual <= tolerance)
 end
 
 function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::Float64, max_iterations::Int)
      step = 1
 
      while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
+          println("Step: ", step)
+          feasibility_diagnostic(p_sol, tolerance)
+
           # Compute a descent direction biais toward the central path
           dx, dlambda, ds = compute_direction(p_sol, sigma)
           # Perform a line search with the constraint that we need to stay in the feasible region
@@ -132,6 +134,8 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
 
      return p_sol
 end
+
+
 
 """
 soln = iplp(Problem,tol) solves the linear program:
@@ -165,29 +169,40 @@ the duality measure (xs'*s)/n <= tol and the normalized residual
 norm([As'*lam + s - cs; As*xs - bs; xs.*s])/norm([bs;cs]) <= tol
 and fails if this takes more than maxit iterations.
 """
-function iplp(problem::IplpProblem, tolerance::Float64)
+function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
      sigma = 0.5
-     max_iterations = 100
-     tau = 10.0
 
-     # TODO: check if unbound
-     # Convert to standard form
      m, n = size(problem.A)
-     cs = [problem.c; zeros(n)]
-     x = zeros(2 * n)
-     As = [problem.A zeros(m, n);
-           Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
-     bs = [problem.b - problem.A * problem.lo;
-           problem.hi - problem.lo]
 
-     # TODO: Find the starting point without relying on another solver
-     xs, lam, s = find_starting_point(cs, As, bs, tau)
+     # If the contraint has inequality constraints on x, we reformulate it.
+     if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
+          println("Convert to standard form")
+          cs = [problem.c; zeros(n)]
+          As = [problem.A zeros(m, n);
+                Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
+          bs = [problem.b - problem.A * problem.lo;
+                problem.hi - problem.lo]
+     else
+          println("No conversion needed, the problem is already in standard form")
+          cs = problem.c
+          As = problem.A
+          bs = problem.b
+     end
 
+     # By default the solution vector is zero
+     x = zeros(n)
+
+     # Find a starting point
+     ms, ns = size(As)
+     xs = ones(ns)
+     lam = zeros(ms)
+     s = ones(ns)
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
-     
-     # shifted solution by lo, needs to shift it back
+
+     # Solve the problem
      shifted_solution = interior_point_method(initial_solution, sigma, tolerance, max_iterations)
-     shifted_solution.x[1:n] += problem.lo
+     # Solution is shifted by problem.lo, we need to shift it back
+     shifted_solution.x = shifted_solution.x[1:n] + problem.lo
 
      return shifted_solution
 end

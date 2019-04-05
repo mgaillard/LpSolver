@@ -15,22 +15,22 @@ mutable struct IplpProblem
 end
 
 # Solves the linear program
-function iplp(problem::IplpProblem, tolerance::Float64)
+function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
 ```
 ### Example
 ```Julia
 # Problem definition
-c = [-1.0; -2.0]
-A = [-2.0   1.0; 
-     -1.0   2.0; 
-      1.0   0.0]
+c = [-1.0; -2.0; 0.0; 0.0; 0.0]
+A = [-2.0 1.0 1.0 0.0 0.0;
+     -1.0 2.0 0.0 1.0 0.0;
+      1.0 0.0 0.0 0.0 1.0]
 b = [2.0; 7.0; 3.0]
-lo = [0.0; 0.0]
-hi = [16.0; 16.0]
+lo = [0.0; 0.0; 0.0; 0.0; 0.0]
+hi = [16.0; 16.0; 16.0; 16.0; 16.0]
 problem = IplpProblem(c, A, b, lo, hi)
 
 # Solve
-solution = iplp(problem, 1e-8)
+solution = iplp(problem, 1e-4)
 
 # Display the solution
 if solution.flag
@@ -59,6 +59,19 @@ This software has been developed for the [CS-520: Computational Optimization](ht
 
 ## Future work
 Look for "TODO" in the code.
+
+## Testing
+We test our algorithm on the problems from the University of Flordia Sparse Matrix repository.
+
+* lp_afiro => OK
+* lp_brandy => Singular exception
+* lp_fit1d => Singular exception (Cause: conversion to standard form)
+* lp_adlittle => Singular exception (Cause: Numerical divergence, works with a small tolerance)
+* lp_agg => OK
+* lp_ganges => Singular exception (Cause: conversion to standard form)
+* lp_stocfor1 => OK
+* lp_25fv47 => Singular exception
+* lpi_chemcom => Singular exception (Cause: conversion to standard form)
 
 ## Licence
 See the LICENSE file.
