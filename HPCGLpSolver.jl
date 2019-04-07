@@ -106,30 +106,43 @@ end
 function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::Float64, max_iterations::Int)
      step = 1
 
-     while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
-          println("Step: ", step)
-          feasibility_diagnostic(p_sol, tolerance)
+     try  
+          while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
+               println("Step: ", step)
+               feasibility_diagnostic(p_sol, tolerance)
 
-          # Compute a descent direction biais toward the central path
-          dx, dlambda, ds = compute_direction(p_sol, sigma)
-          # Perform a line search with the constraint that we need to stay in the feasible region
-          alpha = pick_alpha(p_sol.xs, p_sol.lam, p_sol.s, dx, dlambda, ds)
-     
-          # Step towards the descent direction
-          p_sol.xs += alpha * dx
-          p_sol.lam += alpha * dlambda
-          p_sol.s += alpha * ds
-     
-          step += 1
-     end
+               # Compute a descent direction biais toward the central path
+               dx, dlambda, ds = compute_direction(p_sol, sigma)
+               # Perform a line search with the constraint that we need to stay in the feasible region
+               alpha = pick_alpha(p_sol.xs, p_sol.lam, p_sol.s, dx, dlambda, ds)
+          
+               # Step towards the descent direction
+               p_sol.xs += alpha * dx
+               p_sol.lam += alpha * dlambda
+               p_sol.s += alpha * ds
+          
+               step += 1
+          end
 
-     # Check if the problem is solved
-     # If so, set x and the flag
-     if check_end_condition(p_sol, sigma, tolerance)
-          # The solution is xs without the slack variables
-          p_sol.x = p_sol.xs[1:length(p_sol.x)]
-          # Problem solved => flag = true
-          p_sol.flag = true
+          # Check if the problem is solved
+          # If so, set x and the flag
+          if check_end_condition(p_sol, sigma, tolerance)
+               # The solution is xs without the slack variables
+               p_sol.x = p_sol.xs[1:length(p_sol.x)]
+               # Problem solved => flag = true
+               p_sol.flag = true
+          end
+
+     catch e
+          # TODO, better stacktrace
+          println("An exception happened! ")
+          println(e)
+          frames = stacktrace()
+          for f in frames
+               println("  ",f)
+          end
+
+          return p_sol
      end
 
      return p_sol
