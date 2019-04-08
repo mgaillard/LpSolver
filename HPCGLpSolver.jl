@@ -134,12 +134,11 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
           end
 
      catch e
-          # TODO, better stacktrace
           println("An exception happened! ")
           println(e)
           frames = stacktrace()
-          for f in frames
-               println("  ",f)
+          for (count,f) in enumerate(frames)
+               println("[",count, "] ",f)
           end
 
           return p_sol
@@ -201,6 +200,15 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
           As = problem.A
           bs = problem.b
      end
+
+     # TODO 
+     # hack methods
+     # problem.hi = 10000.0 * ones(size(problem.hi))
+     # cs = [problem.c; zeros(n)]
+     # As = [problem.A zeros(m, n);
+     #       Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
+     # bs = [problem.b - problem.A * problem.lo;
+     #       problem.hi - problem.lo]
 
      # By default the solution vector is zero
      x = zeros(n)
