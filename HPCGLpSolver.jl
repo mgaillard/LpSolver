@@ -187,19 +187,27 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
      m, n = size(problem.A)
 
      # If the contraint has inequality constraints on x, we reformulate it.
-     if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
+     # if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
+     
+     if length(findall(problem.hi .!= Infinity)) > 0
           println("Convert to standard form")
-          cs = [problem.c; zeros(n)]
-          As = [problem.A zeros(m, n);
-                Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
-          bs = [problem.b - problem.A * problem.lo;
-                problem.hi - problem.lo]
+          hi = problem.hi - problem.lo
+
+          noninf_constraint_indice = findall(hi .!= Infinity)
+          noninf_hi_num = length(noninf_constraint_indice)
+          noninf_hi = hi[noninf_constraint_indice] 
+          
+          As = [problem.A                zeros(m,noninf_hi_num); 
+                zeros(noninf_hi_num, n)  Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)]
+          bs = [problem.b - problem.A * problem.lo; noninf_hi]
+          cs = [problem.c; zeros(noninf_hi_num)]
      else
           println("No conversion needed, the problem is already in standard form")
           cs = problem.c
           As = problem.A
           bs = problem.b
      end
+
 
      # TODO 
      # hack methods
