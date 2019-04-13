@@ -58,7 +58,10 @@ Purdue University
 This software has been developed for the [CS-520: Computational Optimization](https://www.cs.purdue.edu/homes/dgleich/cs520-2019) class at Purdue University.
 
 ## Future work
-Look for "TODO" in the code.
+
+- Check if problem is empty
+- Conversion to standard form
+- Deal with singular matrix
 
 ## Testing
 We test our algorithm on the problems from the University of Flordia Sparse Matrix repository.
