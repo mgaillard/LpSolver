@@ -35,13 +35,24 @@ mutable struct IplpSolution
  end
 
 # Compute the residual of the KKT condition Ax = b
+function residual_c(s::Vector{Float64},
+                    As::SparseMatrixCSC{Float64},
+                    lam::Vector{Float64},
+                    cs::Vector{Float64})
+     return s + As' * lam .- cs
+end
 function residual_c(p_sol::IplpSolution)
-     return p_sol.s + p_sol.As' * p_sol.lam .- p_sol.cs
+     return residual_c(p_sol.s, p_sol.As, p_sol.lam, p_sol.cs)
 end
 
 # Compute the residual of the KKT condition A'lam + s = c
+function residual_b(As::SparseMatrixCSC{Float64},
+                    xs::Vector{Float64},
+                    bs::Vector{Float64})
+     return As * xs .- bs
+end
 function residual_b(p_sol::IplpSolution)
-     return p_sol.As * p_sol.xs .- p_sol.bs
+     return residual_b(p_sol.As, p_sol.xs, p_sol.bs)
 end
 
 function compute_direction(p_sol::IplpSolution, sigma)
@@ -72,14 +83,40 @@ function compute_direction(p_sol::IplpSolution, sigma)
      return dx, dlambda, ds
 end
 
-# Choose alpha with the backtracking method
-function pick_alpha(x, lambda, s, dx, dlambda, ds)
-     alpha = 1.0
+function check_alpha_condition(p_sol::IplpSolution, dx, dlambda, ds, initial_residual, alpha)
+     # Constants useful for the computation
+     n = length(p_sol.cs)
+     # Beta >= 1
+     beta = 1e4
+     # Gamma in [0, 1]
+     gamma = 1e-4
 
-     while (any((x + alpha * dx) .< 0) || any((s + alpha * ds) .< 0))
+     # Compute the potential location
+     xs = p_sol.xs + alpha * dx
+     lambda = p_sol.lam + alpha * dlambda
+     s = p_sol.s + alpha * ds
+
+     # Mean of the x_i*s_i coefficients
+     current_mu = dot(p_sol.xs, p_sol.s)/n
+     mu = dot(xs, s)/n
+     rb = residual_b(p_sol.As, xs, p_sol.bs)
+     rc = residual_c(s, p_sol.As, lambda, p_sol.cs)
+
+     return (norm([rb; rc]) > initial_residual*beta*mu
+          || any(xs .< 0)
+          || any(s .< 0)
+          || any((xs.*s) .< gamma*mu)
+          || any(mu .> (1 - 0.01*alpha)*current_mu))
+end
+
+# Choose alpha in ]0; 1] IPF algorithm (page 131/310)
+function pick_alpha(p_sol::IplpSolution, dx, dlambda, ds, initial_residual)
+     alpha = 1.0
+     
+     while check_alpha_condition(p_sol, dx, dlambda, ds, initial_residual, alpha)
           alpha /= 2;
      end
-
+     
      return alpha
 end
 
@@ -89,7 +126,7 @@ function check_end_condition(p_sol::IplpSolution, sigma::Float64, tolerance::Flo
      # Compute the normalized residual
      residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
      # End condition
-     return (all(mu .<= tolerance) && residual <= tolerance)
+     return (mu <= tolerance) && (residual <= tolerance)
 end
 
 function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
@@ -101,10 +138,18 @@ function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
      residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
      println("Norm of residual: ", residual)
      println("Tolerance test for residual: ", residual <= tolerance)
+     mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
+     println("Mu: ", mu)
+     println("Tolerance test for mu: ", mu <= tolerance)
 end
 
 function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::Float64, max_iterations::Int)
      step = 1
+
+     # Compute initial residuals
+     # Used later when choosing alpha
+     initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
+     initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
 
      try  
           while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
@@ -114,7 +159,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
                # Compute a descent direction biais toward the central path
                dx, dlambda, ds = compute_direction(p_sol, sigma)
                # Perform a line search with the constraint that we need to stay in the feasible region
-               alpha = pick_alpha(p_sol.xs, p_sol.lam, p_sol.s, dx, dlambda, ds)
+               alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
           
                # Step towards the descent direction
                p_sol.xs += alpha * dx
@@ -123,16 +168,6 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
           
                step += 1
           end
-
-          # Check if the problem is solved
-          # If so, set x and the flag
-          if check_end_condition(p_sol, sigma, tolerance)
-               # The solution is xs without the slack variables
-               p_sol.x = p_sol.xs[1:length(p_sol.x)]
-               # Problem solved => flag = true
-               p_sol.flag = true
-          end
-
      catch e
           println("An exception happened! ")
           println(e)
@@ -142,6 +177,15 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
           end
 
           return p_sol
+     end
+
+     # Check if the problem is solved
+     # If so, set x and the flag
+     if check_end_condition(p_sol, sigma, tolerance)
+          # The solution is xs without the slack variables
+          p_sol.x = p_sol.xs[1:length(p_sol.x)]
+          # Problem solved => flag = true
+          p_sol.flag = true
      end
 
      return p_sol
@@ -215,9 +259,10 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
 
      # Find a starting point
      ms, ns = size(As)
-     xs = ones(ns)
+     zeta = 128.0
+     xs = zeta * ones(ns)
      lam = zeros(ms)
-     s = ones(ns)
+     s = zeta * ones(ns)
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
 
      # Solve the problem
