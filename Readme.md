@@ -74,7 +74,7 @@ We test our algorithm on the problems from the University of Flordia Sparse Matr
 * lp_ganges => Solution found but it is not correct
 * lp_stocfor1 => OK
 * lp_25fv47 => Singular exception
-* lpi_chemcom => Singular exception (Cause: conversion to standard form)
+* lpi_chemcom => Singular exception (Cause: problem is infeasible)
 
 ## Licence
 See the LICENSE file.
