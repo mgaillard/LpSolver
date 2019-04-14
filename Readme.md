@@ -68,10 +68,10 @@ We test our algorithm on the problems from the University of Flordia Sparse Matr
 
 * lp_afiro => OK
 * lp_brandy => Singular exception
-* lp_fit1d => Singular exception (Cause: conversion to standard form)
-* lp_adlittle => Singular exception (Cause: Numerical divergence, works with a small tolerance)
+* lp_fit1d => Singular exception
+* lp_adlittle => OK
 * lp_agg => OK
-* lp_ganges => Singular exception (Cause: conversion to standard form)
+* lp_ganges => Solution found but it is not correct
 * lp_stocfor1 => OK
 * lp_25fv47 => Singular exception
 * lpi_chemcom => Singular exception (Cause: conversion to standard form)

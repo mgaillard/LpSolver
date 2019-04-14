@@ -252,16 +252,6 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
           bs = problem.b
      end
 
-
-     # TODO 
-     # hack methods
-     # problem.hi = 10000.0 * ones(size(problem.hi))
-     # cs = [problem.c; zeros(n)]
-     # As = [problem.A zeros(m, n);
-     #       Matrix{Float64}(I,n,n) Matrix{Float64}(I,n,n)]
-     # bs = [problem.b - problem.A * problem.lo;
-     #       problem.hi - problem.lo]
-
      # By default the solution vector is zero
      x = zeros(n)
 
