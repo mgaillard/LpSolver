@@ -3,6 +3,7 @@ import HPCGLpSolver
 using LinearAlgebra
 using SparseArrays
 using MatrixDepot
+using Printf
 
 function convert_matrixdepot(P::MatrixDepot.MatrixDescriptor)::HPCGLpSolver.IplpProblem
     return HPCGLpSolver.IplpProblem(vec(P.c), P.A, vec(P.b), vec(P.lo), vec(P.hi))
@@ -77,7 +78,7 @@ function test_problems()
     println(failed_problem)
     println("Difference w.r.t reference: ")
     for (key, value) in diff_reference
-        println(key, " ", value)
+        @printf("Problem: %10s  Diff: %f \n", key, value)        
     end
     
 end
