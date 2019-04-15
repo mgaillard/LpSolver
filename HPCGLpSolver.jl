@@ -55,7 +55,7 @@ function residual_b(p_sol::IplpSolution)
      return residual_b(p_sol.As, p_sol.xs, p_sol.bs)
 end
 
-function compute_direction(p_sol::IplpSolution, sigma)
+function compute_direction_standard(p_sol::IplpSolution, sigma)
      # Compute the steps 
      n = length(p_sol.cs)
      m = size(p_sol.As, 1)
@@ -79,6 +79,35 @@ function compute_direction(p_sol::IplpSolution, sigma)
      dx = d[1:n]
      dlambda = d[n + 1:m + n]
      ds = d[m + n + 1:end]
+
+     return dx, dlambda, ds
+end
+
+# Second form of the step equation
+function compute_direction_augmented(p_sol::IplpSolution, sigma)
+     # Compute the steps 
+     n = length(p_sol.cs)
+     m = size(p_sol.As, 1)
+
+     # Precompute D matrix
+     mu = dot(p_sol.xs, p_sol.s)/n
+     D2 = Diagonal(vec(p_sol.s ./ p_sol.xs))
+     X_inv = Diagonal(vec(1.0 ./ p_sol.xs))
+     residual_xs = p_sol.xs .* p_sol.s .- sigma * mu
+
+     # Modified Jacobian matrix
+     J = [zeros(m, m)  p_sol.As;
+          p_sol.As'    -D2]
+
+     # Modified function for Newton method
+     Fc = [residual_b(p_sol); residual_c(p_sol) - X_inv * residual_xs]
+
+     # Direction in which we perform the line search
+     d = J\-Fc
+
+     dlambda = d[1:m]
+     dx = d[m + 1:m + n]
+     ds = -X_inv * (residual_xs + p_sol.s .* dx)
 
      return dx, dlambda, ds
 end
@@ -157,7 +186,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
                feasibility_diagnostic(p_sol, tolerance)
 
                # Compute a descent direction biais toward the central path
-               dx, dlambda, ds = compute_direction(p_sol, sigma)
+               dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
                # Perform a line search with the constraint that we need to stay in the feasible region
                alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
           
