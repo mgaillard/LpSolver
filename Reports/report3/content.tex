@@ -1,0 +1,51 @@
+\subsection{What has been done}\label{section:done}
+In summary, we solved 1.5 more questions after we implement the conversions to standard form that can deal with some constraints has $\infty$ hi. To be  specific, we re-organize the constraints whose hi is not $\infty$. For those $\infty$ hi, we just leave it there and treat the $x_j$ as free. 
+So until now, these questions are solved: 
+
+\begin{itemize}
+    \item $lp\_afiro$
+    \item $lp\_adlittle$
+    \item $lp\_agg$
+    \item $lp\_stocfor1$
+\end{itemize}
+
+The 0.5 means $lp\_ganges$ does satisfy the termination condition: 
+
+\begin{lstlisting}
+all(mu .<= tolerance) && residual <= tolerance
+\end{lstlisting}
+
+But after checking the result: 
+\begin{lstlisting}
+    problem.c' * solution.x
+\end{lstlisting}
+we find it is not close enough to the right optimal value from reference. Currently, we have not figured out why. \\
+
+At the same time, we implemented better conditions to pick alpha, we take a more robust path. We still need to find an optimal alpha, however as it is written in the book, a slightly smaller alpha is not problematic, it is just slower. 
+
+We read the chapters 6 and 11 and focus on implementing the second kind of step equations: 
+
+\begin{align*}
+   \begin{pmatrix}
+    0 & A \\ 
+    A^T & -D^{-2}
+   \end{pmatrix} 
+   \begin{pmatrix}
+   \nabla \lambda \\
+   \nabla x
+   \end{pmatrix}
+   &= \begin{pmatrix}
+   -r_b \\
+   -r_c + X^{-1} r_{xs}
+   \end{pmatrix} \\
+   \nabla s    &= -X^{-1} (r_{xs} + S \nabla x)
+\end{align*}
+
+At the same time, we are also working on implementing cholesky factorization, especially the cholesky factorization for sparse matrix and singular matrix. 
+
+We have also set up a testing framework to test all problems given by Prof. Gleich. 
+
+\subsection{Future work}\label{section:future}
+Although Julia has provided cholesky factorization for us, we have not tested it in sparse and singular matrix to see its robustness. This will be our next step. At the same time, we will focus on page 220 - 224 to finish the implementation of the second step equation. 
+
+Another important step for us is to make a detection for unbounded problem and for infeasible problem. For example, problem $lpi\_chemcom$ is an infeasible problem. But we do not have detection for it yet. 
