@@ -116,9 +116,9 @@ function check_alpha_condition(p_sol::IplpSolution, dx, dlambda, ds, initial_res
      # Constants useful for the computation
      n = length(p_sol.cs)
      # Beta >= 1
-     beta = 1e4
+     beta = 1e7
      # Gamma in [0, 1]
-     gamma = 1e-4
+     gamma = 1e-7
 
      # Compute the potential location
      xs = p_sol.xs + alpha * dx
@@ -260,6 +260,9 @@ function solve_constrained_least_norm(A, b)
      return z[1:n]
 end
 
+"""
+Mehrotra section 7 page 15 of 27
+"""
 function find_starting_point(A, b, c)
      m, n = size(A)
 
@@ -268,21 +271,18 @@ function find_starting_point(A, b, c)
      lambda_hat = lambda_s_hat[1:m]
      s_hat = lambda_s_hat[m + 1:m + n]
 
-     # Code pasted from GitHub TODO: RECODE and CHECK !!!
-     delta_x = max(-(3.0/2.0)*minimum(x_hat), 0)
-     delta_s = max(-(3.0/2.0)*minimum(s_hat), 0)
+     delta_x = max(-1.5 * minimum(x_hat), 0.0)
+     delta_s = max(-1.5 * minimum(s_hat), 0.0)
 
-     n = size(x_hat,1)
-     x_hat = x_hat + delta_x*ones(n,1)
-     s_hat = s_hat + delta_s*ones(n,1)
+     numerator_x_term = x_hat + delta_x * ones(n, 1)
+     numerator_s_term = s_hat + delta_s * ones(n, 1)     
 
-     delta_x = (0.5 * (x_hat'*s_hat) / (ones(n,1)'*s_hat))[1]
-     delta_s = (0.5 * (x_hat'*s_hat) / (ones(n,1)'*x_hat))[1]
-
-     xs = vec(x_hat + delta_x*ones(n,1))
+     delta_x_hat = delta_x + 0.5 * (dot(numerator_x_term, numerator_s_term) / sum(numerator_s_term))
+     delta_s_hat = delta_s + 0.5 * (dot(numerator_x_term, numerator_s_term) / sum(numerator_x_term))
+     
+     xs = vec(x_hat + delta_x_hat * ones(n, 1))
      lam = vec(lambda_hat)
-     s = vec(s_hat + delta_s*ones(n,1))
-     # END # Code pasted from GitHub TODO: RECODE and CHECK !!!
+     s = vec(s_hat + delta_s_hat * ones(n, 1))
 
      return xs, lam, s
 end

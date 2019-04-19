@@ -67,10 +67,10 @@ This software has been developed for the [CS-520: Computational Optimization](ht
 We test our algorithm on the problems from the University of Flordia Sparse Matrix repository.
 
 * lp_afiro => OK
-* lp_brandy => Singular exception but OK with a small tolerance (Cause: robustness of the step equation)
-* lp_fit1d => Singular exception (Cause: very slow, reaches the maximum number of iterations)
+* lp_brandy => OK
+* lp_fit1d => NO (Cause: very slow, reaches the maximum number of iterations)
 * lp_adlittle => OK
-* lp_agg => OK
+* lp_agg => NO (Cause: very slow, reaches the maximum number of iterations)
 * lp_ganges => Solution found but it is not correct (Cause: unknown)
 * lp_stocfor1 => OK
 * lp_25fv47 => OK
