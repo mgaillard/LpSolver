@@ -247,6 +247,47 @@ function remove_useless_rows(problem::IplpProblem)::IplpProblem
 end
 
 """
+Solve min 0.5 * ||x|| st Ax = b
+By using the augmented system of normal equations
+"""
+function solve_constrained_least_norm(A, b)
+     m, n = size(A)
+     # Step 1, form the block system
+     M = [Matrix{Float64}(I,n,n) A'; A zeros(m,m)]
+     # Step 2, solve
+     z = M\[zeros(n); b]
+     # Step 3, extract 
+     return z[1:n]
+end
+
+function find_starting_point(A, b, c)
+     m, n = size(A)
+
+     x_hat = solve_constrained_least_norm(A, b)
+     lambda_s_hat = solve_constrained_least_norm([A' Matrix{Float64}(I,n,n)], c)
+     lambda_hat = lambda_s_hat[1:m]
+     s_hat = lambda_s_hat[m + 1:m + n]
+
+     # Code pasted from GitHub TODO: RECODE and CHECK !!!
+     delta_x = max(-(3.0/2.0)*minimum(x_hat), 0)
+     delta_s = max(-(3.0/2.0)*minimum(s_hat), 0)
+
+     n = size(x_hat,1)
+     x_hat = x_hat + delta_x*ones(n,1)
+     s_hat = s_hat + delta_s*ones(n,1)
+
+     delta_x = (0.5 * (x_hat'*s_hat) / (ones(n,1)'*s_hat))[1]
+     delta_s = (0.5 * (x_hat'*s_hat) / (ones(n,1)'*x_hat))[1]
+
+     xs = vec(x_hat + delta_x*ones(n,1))
+     lam = vec(lambda_hat)
+     s = vec(s_hat + delta_s*ones(n,1))
+     # END # Code pasted from GitHub TODO: RECODE and CHECK !!!
+
+     return xs, lam, s
+end
+
+"""
 soln = iplp(Problem,tol) solves the linear program:
 
    minimize c'*x where Ax = b and lo <= x <= hi
@@ -278,7 +319,7 @@ the duality measure (xs'*s)/n <= tol and the normalized residual
 norm([As'*lam + s - cs; As*xs - bs; xs.*s])/norm([bs;cs]) <= tol
 and fails if this takes more than maxit iterations.
 """
-function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
+function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::IplpSolution
      sigma = 0.5
 
      # Remove rows of A and b populated only with zeros.
@@ -312,11 +353,8 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)
      x = zeros(n)
 
      # Find a starting point
-     ms, ns = size(As)
-     zeta = 128.0
-     xs = zeta * ones(ns)
-     lam = zeros(ms)
-     s = zeta * ones(ns)
+     xs, lam, s = find_starting_point(As, bs, cs)
+
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
 
      # Solve the problem
