@@ -52,7 +52,7 @@ SRC: https://www.cs.purdue.edu/homes/dgleich/cs520-2019/project.html
 """
 function test_problems()
      problem_folder = "LPnetlib/"
-     problem_sets = ["lp_afiro", "lp_brandy", "lp_fit1d", "lp_adlittle", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
+     problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
      success_problem = []
      failed_problem = []
      diff_reference = Dict()
@@ -83,9 +83,10 @@ function test_problems()
     println(failed_problem)
     println("Difference w.r.t reference: ")
     for (key, value) in diff_reference
-        @printf("Problem: %10s  Diff: %f Time: %10f \n", key, value, timing_list[key] * 1e-9)        
+        @printf("Problem: %10s \t Diff: %10f \t Time: %10f \n", key, value, timing_list[key] * 1e-9)        
     end
-    
+    println()
+
 end
 
 test_problems()
