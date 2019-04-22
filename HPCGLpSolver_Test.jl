@@ -56,11 +56,16 @@ function test_problems()
      success_problem = []
      failed_problem = []
      diff_reference = Dict()
+     timing_list = Dict()
      for p_str in problem_sets
         println("Current problem " * p_str)
         problem_name = problem_folder * p_str
         problem = create_problem(problem_name)
+        
+        start = time_ns()
         solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=1000)
+        elapsed = time_ns() - start
+        timing_list[p_str] = elapsed
         
         # compute differnece w.r.t reference optimal value for debugging
         diff_reference[p_str] = problem.c' * solution.x - opt_dict[p_str]
@@ -78,7 +83,7 @@ function test_problems()
     println(failed_problem)
     println("Difference w.r.t reference: ")
     for (key, value) in diff_reference
-        @printf("Problem: %10s  Diff: %f \n", key, value)        
+        @printf("Problem: %10s  Diff: %f Time: %10f \n", key, value, timing_list[key] * 1e-9)        
     end
     
 end

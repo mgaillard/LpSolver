@@ -103,6 +103,7 @@ function compute_direction_augmented(p_sol::IplpSolution, sigma)
      Fc = [residual_b(p_sol); residual_c(p_sol) - X_inv * residual_xs]
 
      # Direction in which we perform the line search
+     # TODO, Use cholesky factorization to compute 
      d = J\-Fc
 
      dlambda = d[1:m]
@@ -110,6 +111,29 @@ function compute_direction_augmented(p_sol::IplpSolution, sigma)
      ds = -X_inv * (residual_xs + p_sol.s .* dx)
 
      return dx, dlambda, ds
+end
+
+function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
+     # Compute the steps 
+     n = length(p_sol.cs)
+     m = size(p_sol.As, 1)
+
+     mu = dot(p_sol.xs, p_sol.s)/n
+     rb = residual_b(p_sol)
+     rc = residual_c(p_sol)
+     rxs = p_sol.xs .* p_sol.s .- sigma * mu;
+
+     # solve delta_lambda, delta_s, delta_x
+     A = p_sol.As
+     X = Diagonal(vec(p_sol.xs))
+     S = Diagonal(vec(p_sol.s))
+     D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
+
+     dlambda = (A * D2 * A')\(-rb + A * (-S\X * rc + S\rxs))
+     ds = -rc - A' * dlambda
+     dx = -S\(rxs + X * ds)
+
+     return dx, dlambda, ds 
 end
 
 function check_alpha_condition(p_sol::IplpSolution, dx, dlambda, ds, initial_residual, alpha)
@@ -186,7 +210,8 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
                feasibility_diagnostic(p_sol, tolerance)
 
                # Compute a descent direction biais toward the central path
-               dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
+               dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+
                # Perform a line search with the constraint that we need to stay in the feasible region
                alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
           
