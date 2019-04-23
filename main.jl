@@ -35,7 +35,7 @@ function create_problem(name::String)::HPCGLpSolver.IplpProblem
 end
 
 # Problem definition
-problem = create_problem("LPnetlib/lp_afiro")
+problem = create_problem("LPnetlib/lp_stocfor1")
 
 # Solve
 solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=1000)

@@ -115,19 +115,34 @@ end
 """HPCG Cholesky
 Given a symmetric semi-positive matrix M, this function computes the factorization form of cholesky
 Return a L matrix
+
+P.S. Use huge pivot strategy to deal with extremly small pivots
 """
-function hpcg_cholesky(M)
+function hpcg_cholesky(M::SparseMatrixCSC{Float64}, tol = 1e-12)
     m,n = size(M)
     @assert(m == n)
     
     L = zeros(m,m)
+    max_pivot = 0.0
     for i in 1:m
-        L[i,i] = sqrt(M[i,i])
-        for j in i + 1 : m
-            L[j,i] = M[j,i] / L[i,i]
-            for k in i+1 : j
-                 M[j,k] = M[j,k] - L[j,i] * L[k,i]
+        max_pivot = max(max_pivot, M[i,i])
+        if M[i,i] >= max_pivot * tol
+            L[i,i] = sqrt(M[i,i])
+            for j in i + 1 : m
+                L[j,i] = M[j,i] / L[i,i]
+                for k in i+1 : j
+                     M[j,k] = M[j,k] - L[j,i] * L[k,i]
+                end
             end
+        else
+            L[i,i] = 1e10
+            for j in i + 1 : m
+                L[j,i] = 1e-10
+                for k in i+1 : j
+                     M[j,k] = M[j,k] - L[j,i] * L[k,i]
+                end
+            end
+               # L[i+1:m, i] = 1e-10
         end
         
     end
@@ -152,7 +167,9 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      M = (A * D2 * A')
 
      # Compute using cholesky
+     start = time_ns()
      L = hpcg_cholesky(M)
+     println("Spend: ", (time_ns() - start) * 1e-9, "s to find cholesky")
 
      L = LowerTriangular(L)
      dlambda = L' \ (L\(-rb + A * (-S \ X * rc + S \ rxs)))
@@ -241,7 +258,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
 
                # Perform a line search with the constraint that we need to stay in the feasible region
                alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
-          
+
                # Step towards the descent direction
                p_sol.xs += alpha * dx
                p_sol.lam += alpha * dlambda
