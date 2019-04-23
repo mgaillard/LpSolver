@@ -103,14 +103,35 @@ function compute_direction_augmented(p_sol::IplpSolution, sigma)
      Fc = [residual_b(p_sol); residual_c(p_sol) - X_inv * residual_xs]
 
      # Direction in which we perform the line search
-     # TODO, Use cholesky factorization to compute 
-     d = J\-Fc
+     d = J \ -Fc
 
      dlambda = d[1:m]
      dx = d[m + 1:m + n]
      ds = -X_inv * (residual_xs + p_sol.s .* dx)
 
      return dx, dlambda, ds
+end
+
+"""HPCG Cholesky
+Given a symmetric semi-positive matrix M, this function computes the factorization form of cholesky
+Return a L matrix
+"""
+function hpcg_cholesky(M)
+    m,n = size(M)
+    @assert(m == n)
+    
+    L = zeros(m,m)
+    for i in 1:m
+        L[i,i] = sqrt(M[i,i])
+        for j in i + 1 : m
+            L[j,i] = M[j,i] / L[i,i]
+            for k in i+1 : j
+                 M[j,k] = M[j,k] - L[j,i] * L[k,i]
+            end
+        end
+        
+    end
+    return L
 end
 
 function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
@@ -128,8 +149,13 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      X = Diagonal(vec(p_sol.xs))
      S = Diagonal(vec(p_sol.s))
      D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
+     M = (A * D2 * A')
 
-     dlambda = (A * D2 * A')\(-rb + A * (-S\X * rc + S\rxs))
+     # Compute using cholesky
+     L = hpcg_cholesky(M)
+
+     L = LowerTriangular(L)
+     dlambda = L' \ (L\(-rb + A * (-S \ X * rc + S \ rxs)))
      ds = -rc - A' * dlambda
      dx = -S\(rxs + X * ds)
 
@@ -211,6 +237,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
 
                # Compute a descent direction biais toward the central path
                dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+               # dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
 
                # Perform a line search with the constraint that we need to stay in the feasible region
                alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)

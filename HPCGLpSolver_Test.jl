@@ -63,7 +63,7 @@ function test_problems()
         problem = create_problem(problem_name)
         
         start = time_ns()
-        solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=1000)
+        solution = HPCGLpSolver.iplp(problem, 1e-8; max_iterations=100)
         elapsed = time_ns() - start
         timing_list[p_str] = elapsed
         
