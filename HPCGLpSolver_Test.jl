@@ -9,6 +9,14 @@ function convert_matrixdepot(P::MatrixDepot.MatrixDescriptor)::HPCGLpSolver.Iplp
     return HPCGLpSolver.IplpProblem(vec(P.c), P.A, vec(P.b), vec(P.lo), vec(P.hi))
 end
 
+function feasibility_diagnostic(p_sol::HPCGLpSolver.IplpSolution)
+    residual = norm([HPCGLpSolver.residual_c(p_sol); HPCGLpSolver.residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+    mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
+
+    return residual, mu
+end
+
+
 # "Ground truth" optimal value is coming from https://www.cise.ufl.edu/research/sparse/matrices/LPnetlib/ 
 opt_dict = Dict("lp_afiro"=>-4.6475314286E+02, 
                 "lp_brandy"=>1.5185098965E+03, 
@@ -53,9 +61,13 @@ SRC: https://www.cs.purdue.edu/homes/dgleich/cs520-2019/project.html
 function test_problems()
      problem_folder = "LPnetlib/"
      problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
+    #  problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle",              "lp_agg",               "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
+
      success_problem = []
      failed_problem = []
      diff_reference = Dict()
+     final_resiual = Dict()
+     final_mu = Dict()
      timing_list = Dict()
      for p_str in problem_sets
         println("Current problem " * p_str)
@@ -63,12 +75,15 @@ function test_problems()
         problem = create_problem(problem_name)
         
         start = time_ns()
-        solution = HPCGLpSolver.iplp(problem, 1e-8; max_iterations=100)
+        solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=100)
         elapsed = time_ns() - start
         timing_list[p_str] = elapsed
         
         # compute differnece w.r.t reference optimal value for debugging
         diff_reference[p_str] = problem.c' * solution.x - opt_dict[p_str]
+        residual, mu = feasibility_diagnostic(solution)
+        final_resiual[p_str] = residual
+        final_mu[p_str] = mu
         if solution.flag # TODO Tolerance with reference optimal value &&  (problem.c' * solution.x - opt_dict[p_str]) < 1e-1
             push!(success_problem, p_str)
         else
@@ -83,7 +98,7 @@ function test_problems()
     println(failed_problem)
     println("Difference w.r.t reference: ")
     for (key, value) in diff_reference
-        @printf("Problem: %10s \t Diff: %10f \t Time: %10f \n", key, value, timing_list[key] * 1e-9)        
+        @printf("Problem: %10s \t Diff: %10f \t Res: %10f \t Mu: %10f \t Time: %10f \n", key, value, final_resiual[key], final_mu[key], timing_list[key] * 1e-9)        
     end
     println()
 

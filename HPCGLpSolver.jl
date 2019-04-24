@@ -4,8 +4,10 @@ using Convex
 using Plots
 using LinearAlgebra
 using SparseArrays
+include("HPCGCholeskySolver.jl")
 
 const Infinity = 1.0e308
+const is_catch = false
 
 mutable struct IplpProblem
      c::Vector{Float64}
@@ -115,38 +117,9 @@ end
 """HPCG Cholesky
 Given a symmetric semi-positive matrix M, this function computes the factorization form of cholesky
 Return a L matrix
-
-P.S. Use huge pivot strategy to deal with extremly small pivots
 """
-function hpcg_cholesky(M::SparseMatrixCSC{Float64}, tol = 1e-12)
-    m,n = size(M)
-    @assert(m == n)
-    
-    L = zeros(m,m)
-    max_pivot = 0.0
-    for i in 1:m
-        max_pivot = max(max_pivot, M[i,i])
-        if M[i,i] >= max_pivot * tol
-            L[i,i] = sqrt(M[i,i])
-            for j in i + 1 : m
-                L[j,i] = M[j,i] / L[i,i]
-                for k in i+1 : j
-                     M[j,k] = M[j,k] - L[j,i] * L[k,i]
-                end
-            end
-        else
-            L[i,i] = 1e10
-            for j in i + 1 : m
-                L[j,i] = 1e-10
-                for k in i+1 : j
-                     M[j,k] = M[j,k] - L[j,i] * L[k,i]
-                end
-            end
-               # L[i+1:m, i] = 1e-10
-        end
-        
-    end
-    return L
+function hpcg_cholesky(M::SparseMatrixCSC{Float64}, cholesky_solver::Function, tol = 1e-12)
+    return cholesky_solver(M, tol)
 end
 
 function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
@@ -165,14 +138,14 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      S = Diagonal(vec(p_sol.s))
      D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
      M = (A * D2 * A')
-
+          
      # Compute using cholesky
      start = time_ns()
-     L = hpcg_cholesky(M)
-     println("Spend: ", (time_ns() - start) * 1e-9, "s to find cholesky")
+     b = -rb + A * (-S \ X * rc + S \ rxs)
+     L = hpcg_cholesky(M, cholesky_skip)
+     dlambda = hpcg_cholesky_solve(L, b)
+     println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
 
-     L = LowerTriangular(L)
-     dlambda = L' \ (L\(-rb + A * (-S \ X * rc + S \ rxs)))
      ds = -rc - A' * dlambda
      dx = -S\(rxs + X * ds)
 
@@ -233,9 +206,9 @@ function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
      println("Norm of residual_b: ", norm(residual_b(p_sol)))
      residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
      println("Norm of residual: ", residual)
-     println("Tolerance test for residual: ", residual <= tolerance)
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      println("Mu: ", mu)
+     println("Tolerance test for residual: ", residual <= tolerance)
      println("Tolerance test for mu: ", mu <= tolerance)
 end
 
@@ -247,7 +220,37 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
      initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
 
-     try  
+     if is_catch
+          try  
+               while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
+                    println("Step: ", step)
+                    feasibility_diagnostic(p_sol, tolerance)
+
+                    # Compute a descent direction biais toward the central path
+                    dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+                    # dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
+
+                    # Perform a line search with the constraint that we need to stay in the feasible region
+                    alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
+
+                    # Step towards the descent direction
+                    p_sol.xs += alpha * dx
+                    p_sol.lam += alpha * dlambda
+                    p_sol.s += alpha * ds
+               
+                    step += 1
+               end
+          catch e
+               println("An exception happened! ")
+               println(e)
+               frames = stacktrace()
+               for (count,f) in enumerate(frames)
+                    println("[",count, "] ",f)
+               end
+
+               return p_sol
+          end
+     else
           while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
                println("Step: ", step)
                feasibility_diagnostic(p_sol, tolerance)
@@ -266,17 +269,8 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
           
                step += 1
           end
-     catch e
-          println("An exception happened! ")
-          println(e)
-          frames = stacktrace()
-          for (count,f) in enumerate(frames)
-               println("[",count, "] ",f)
-          end
-
-          return p_sol
      end
-
+     
      # Check if the problem is solved
      # If so, set x and the flag
      if check_end_condition(p_sol, sigma, tolerance)

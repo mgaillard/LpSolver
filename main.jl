@@ -35,10 +35,11 @@ function create_problem(name::String)::HPCGLpSolver.IplpProblem
 end
 
 # Problem definition
-problem = create_problem("LPnetlib/lp_stocfor1")
+problem = create_problem("LPnetlib/lp_25fv47")
+# problem = create_problem("LPnetlib/lp_afiro")
 
 # Solve
-solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=1000)
+solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=100)
 
 # Display the solution
 if solution.flag
