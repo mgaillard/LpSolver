@@ -4,6 +4,7 @@ using Convex
 using Plots
 using LinearAlgebra
 using SparseArrays
+
 include("HPCGCholeskySolver.jl")
 
 const Infinity = 1.0e308
@@ -189,7 +190,7 @@ function pick_alpha(p_sol::IplpSolution, dx, dlambda, ds, initial_residual)
      return alpha
 end
 
-function check_end_condition(p_sol::IplpSolution, sigma::Float64, tolerance::Float64)
+function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
      # Compute the duality measure
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      # Compute the normalized residual
@@ -212,6 +213,58 @@ function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
      println("Tolerance test for mu: ", mu <= tolerance)
 end
 
+"""
+Adaptation of sigma
+Page 196
+"""
+function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterations::Int)
+     step = 1
+
+     # Compute initial residuals
+     # Used later when choosing alpha
+     initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
+     initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
+
+     while (step < max_iterations && !check_end_condition(p_sol, tolerance))
+          println("Step: ", step)
+          feasibility_diagnostic(p_sol, tolerance)
+
+          # Compute affine 
+          # TODO, Make this step faster
+          affine_dx, affine_dlambda, affine_ds = compute_direction_normal_equation(p_sol, 0.0) 
+          alpha = pick_alpha(p_sol, affine_dx, affine_dlambda, affine_ds, initial_residual)
+          n = length(p_sol.cs)
+          mu_aff = (p_sol.xs + alpha * affine_dx)' * (p_sol.s + alpha * affine_ds) / n
+          mu = (p_sol.xs' * p_sol.s)/n
+          sigma = (mu_aff/mu)^3
+          @show sigma
+          
+          # Compute adpated sigma for central path algorithm
+          dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+
+          # Perform a line search with the constraint that we need to stay in the feasible region
+          alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
+
+          # Step towards the descent direction
+          p_sol.xs += alpha * dx
+          p_sol.lam += alpha * dlambda
+          p_sol.s += alpha * ds
+     
+          step += 1
+     end
+     
+     # Check if the problem is solved
+     # If so, set x and the flag
+     if check_end_condition(p_sol, tolerance)
+          # The solution is xs without the slack variables
+          p_sol.x = p_sol.xs[1:length(p_sol.x)]
+          # Problem solved => flag = true
+          p_sol.flag = true
+     end
+
+     return p_sol
+end
+
 function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::Float64, max_iterations::Int)
      step = 1
 
@@ -222,7 +275,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
 
      if is_catch
           try  
-               while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
+               while (step < max_iterations && !check_end_condition(p_sol, tolerance))
                     println("Step: ", step)
                     feasibility_diagnostic(p_sol, tolerance)
 
@@ -251,7 +304,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
                return p_sol
           end
      else
-          while (step < max_iterations && !check_end_condition(p_sol, sigma, tolerance))
+          while (step < max_iterations && !check_end_condition(p_sol, tolerance))
                println("Step: ", step)
                feasibility_diagnostic(p_sol, tolerance)
 
@@ -273,7 +326,7 @@ function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::F
      
      # Check if the problem is solved
      # If so, set x and the flag
-     if check_end_condition(p_sol, sigma, tolerance)
+     if check_end_condition(p_sol, tolerance)
           # The solution is xs without the slack variables
           p_sol.x = p_sol.xs[1:length(p_sol.x)]
           # Problem solved => flag = true
@@ -421,11 +474,13 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
 
      # Solve the problem
-     shifted_solution = interior_point_method(initial_solution, sigma, tolerance, max_iterations)
-     # Solution is shifted by problem.lo, we need to shift it back
-     shifted_solution.x = shifted_solution.x[1:n] + problem.lo
+     # standard_solution = interior_point_method(initial_solution, sigma, tolerance, max_iterations)
+     standard_solution = predictor_corrector(initial_solution, tolerance, max_iterations)
 
-     return shifted_solution
+     # Solution is shifted by problem.lo, we need to shift it back
+     standard_solution.x = standard_solution.x[1:n] + problem.lo
+
+     return standard_solution
 end
 
 export IplpProblem

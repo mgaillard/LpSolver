@@ -6,7 +6,7 @@ using LinearAlgebra
 using SparseArrays
 
 # Skip small pivots
-function cholesky_skip(M, tol=1e-12)
+function cholesky_skip(M, tol=1e-15)
     m,n = size(M)
     @assert m==n "To factorize, M should be a squared matrix"
 
@@ -31,7 +31,7 @@ function cholesky_skip(M, tol=1e-12)
     return L
 end
 
-function cholesky_big(M, tol=1e-12)
+function cholesky_big(M, tol=1e-15)
     m,n = size(M)
     @assert m==n "To factorize, M should be a squared matrix"
 
