@@ -66,14 +66,15 @@ This software has been developed for the [CS-520: Computational Optimization](ht
 ## Testing
 We test our algorithm on the problems from the University of Flordia Sparse Matrix repository.
 
+**tol = 1e-7**
 * lp_afiro => OK
 * lp_brandy => OK
-* lp_fit1d => NO (Cause: very slow, reaches the maximum number of iterations)
+* lp_fit1d => NO (Cause: stuck when close)
 * lp_adlittle => OK
-* lp_agg => NO (Cause: very slow, reaches the maximum number of iterations)
-* lp_ganges => Solution found but it is not correct (Cause: unknown)
+* lp_agg => Yes
+* lp_ganges => NO (Cause: stuck when close)
 * lp_stocfor1 => OK
-* lp_25fv47 => OK
+* lp_25fv47 => NO (Cause: stuck when close)
 * lpi_chemcom => Singular exception (Cause: problem is infeasible)
 
 ## Licence
