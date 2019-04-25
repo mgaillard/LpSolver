@@ -81,7 +81,7 @@ We test our algorithm on the problems from the University of Flordia Sparse Matr
 | lp_ganges     | &#x2612;      |0.5622249587237997 | 4.1857702837761206e-5     | N/A       |
 | lpi_chemcom   | &#x2612;      |0.5                | 0.5                       | N/A       |
 
-**tol = 1e-8**
+**tol = 1e-8** (lp_agg: res: 0.0002655672471816056, mu: 1.2568445145305518e-21)
 
 | Problem name  |     Sucess    |
 | ------------- | ------------- |
