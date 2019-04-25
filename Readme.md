@@ -81,5 +81,19 @@ We test our algorithm on the problems from the University of Flordia Sparse Matr
 | lp_ganges     | &#x2612;      |0.5622249587237997 | 4.1857702837761206e-5     | N/A       |
 | lpi_chemcom   | &#x2612;      |0.5                | 0.5                       | N/A       |
 
+**tol = 1e-8**
+
+| Problem name  |     Sucess    |
+| ------------- | ------------- |
+| lp_afiro      | &#x2611;      |
+| lp_brandy     | &#x2611;      |
+| lp_adlittle   | &#x2611;      |
+| lp_agg        | &#x2612;      |
+| lp_stocfor1   | &#x2611;      |
+| lp_fit1d      | &#x2612;      |
+| lp_25fv47     | &#x2612;      |
+| lp_ganges     | &#x2612;      |
+| lpi_chemcom   | &#x2612;      |
+
 ## Licence
 See the LICENSE file.
