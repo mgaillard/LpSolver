@@ -37,7 +37,7 @@ end
 # Problem definition
 # problem = create_problem("LPnetlib/lp_25fv47")
 # problem = create_problem("LPnetlib/lp_afiro")
-problem = create_problem("LPnetlib/lp_fit1d")
+problem = create_problem("LPnetlib/lp_brandy")
 
 # Solve
 solution = HPCGLpSolver.iplp(problem, 1e-8; max_iterations=100)

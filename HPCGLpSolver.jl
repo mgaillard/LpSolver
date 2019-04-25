@@ -145,7 +145,7 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      b = -rb + A * (-S \ X * rc + S \ rxs)
      L = hpcg_cholesky(M, cholesky_skip)
      dlambda = hpcg_cholesky_solve(L, b)
-     println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
+     # println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
 
      ds = -rc - A' * dlambda
      dx = -S\(rxs + X * ds)
@@ -179,7 +179,7 @@ function check_alpha_condition(p_sol::IplpSolution, dx, dlambda, ds, initial_res
           || any(mu .> (1 - 0.01*alpha)*current_mu))
 end
 
-# Choose alpha in ]0; 1] IPF algorithm (page 131/310)
+# Choose alpha in [0, 1] IPF algorithm (page 131/310)
 function pick_alpha(p_sol::IplpSolution, dx, dlambda, ds, initial_residual)
      alpha = 1.0
      
@@ -225,6 +225,7 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
      initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
 
+     # default_sigma = 0.1
      while (step < max_iterations && !check_end_condition(p_sol, tolerance))
           println("Step: ", step)
           feasibility_diagnostic(p_sol, tolerance)
@@ -232,18 +233,26 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           # Compute affine 
           # TODO, Make this step faster
           affine_dx, affine_dlambda, affine_ds = compute_direction_normal_equation(p_sol, 0.0) 
-          alpha = pick_alpha(p_sol, affine_dx, affine_dlambda, affine_ds, initial_residual)
-          n = length(p_sol.cs)
-          mu_aff = (p_sol.xs + alpha * affine_dx)' * (p_sol.s + alpha * affine_ds) / n
-          mu = (p_sol.xs' * p_sol.s)/n
-          sigma = (mu_aff/mu)^3
-          @show sigma
           
+          n = length(p_sol.cs)
+          cur_mu = dot(p_sol.xs, p_sol.s)/n
+          cur_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / cur_mu
+          
+          alpha = pick_alpha(p_sol, affine_dx, affine_dlambda, affine_ds, cur_residual)
+          
+          mu_aff = (p_sol.xs + alpha * affine_dx)' * (p_sol.s + alpha * affine_ds) / n
+          sigma = (mu_aff/cur_mu)^3
+          @show sigma
+
           # Compute adpated sigma for central path algorithm
+          if step % 2 == 0
+               sigma = sigma * 0.5
+          end
+
           dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
 
           # Perform a line search with the constraint that we need to stay in the feasible region
-          alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
+          alpha = pick_alpha(p_sol, dx, dlambda, ds, cur_residual)
 
           # Step towards the descent direction
           p_sol.xs += alpha * dx

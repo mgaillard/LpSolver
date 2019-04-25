@@ -5,8 +5,9 @@ Src: Primal-Dual-Interior-Point-Method, Page 218, 219
 using LinearAlgebra
 using SparseArrays
 
+const default_tol = 1e-18
 # Skip small pivots
-function cholesky_skip(M, tol=1e-15)
+function cholesky_skip(M, tol=default_tol)
     m,n = size(M)
     @assert m==n "To factorize, M should be a squared matrix"
 
@@ -31,7 +32,7 @@ function cholesky_skip(M, tol=1e-15)
     return L
 end
 
-function cholesky_big(M, tol=1e-15)
+function cholesky_big(M, tol=default_tol)
     m,n = size(M)
     @assert m==n "To factorize, M should be a squared matrix"
 
