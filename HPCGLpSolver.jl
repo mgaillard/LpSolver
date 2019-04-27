@@ -8,7 +8,6 @@ using SparseArrays
 include("HPCGCholeskySolver.jl")
 
 const Infinity = 1.0e308
-const is_catch = false
 
 mutable struct IplpProblem
      c::Vector{Float64}
@@ -195,20 +194,17 @@ function compute_predictor(p_sol::IplpSolution, normal_factored_lhs, sigma)
 end
 
 function alpha_max(x, dx, hi = 1.0)
-    n = length(x)
-    alpha = 1.0
-
-    for i=1:n
-        if dx[i] < 0
-          a = clamp(-x[i]/dx[i], 0.0, hi)
-          alpha = min(alpha, a)
-        end
-    end
-
-    alpha = clamp(alpha, 0.0, hi)
-
-    return alpha
-end
+     n = length(x)
+     alpha = hi
+ 
+     for i=1:n
+         if dx[i] < 0.0
+           alpha = min(alpha, -x[i]/dx[i])
+         end
+     end
+ 
+     return alpha
+ end
 
 function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
      # Compute the duality measure
@@ -238,8 +234,9 @@ Adaptation of sigma
 Page 196
 """
 function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterations::Int)
+     n = length(p_sol.cs)
+     
      step = 1
-
      while (step < max_iterations && !check_end_condition(p_sol, tolerance))
           println("Step: ", step)
           feasibility_diagnostic(p_sol, tolerance)
@@ -250,41 +247,37 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           # Predictor step
           affine_dx, affine_dlambda, affine_ds = compute_predictor(p_sol, normal_factored_lhs, 0.0) 
           
-          n = length(p_sol.cs)
           cur_mu = dot(p_sol.xs, p_sol.s)/n
           
-          alpha_x = alpha_max(p_sol.xs, affine_dx) 
-          alpha_dual = alpha_max(p_sol.s, affine_ds)
-
-          alpha_x = min(0.9 * alpha_x, 1.0)
-          alpha_dual = min(0.9 * alpha_dual, 1.0)
+          affine_primal_alpha = alpha_max(p_sol.xs, affine_dx)
+          affine_dual_alpha = alpha_max(p_sol.s, affine_ds)
           
-          mu_aff = dot(p_sol.xs + alpha_x * affine_dx, p_sol.s + alpha_dual * affine_ds) / n
+          mu_aff = dot(p_sol.xs + affine_primal_alpha * affine_dx, p_sol.s + affine_dual_alpha * affine_ds) / n
                
-          sigma = clamp((mu_aff / cur_mu)^3, 0.0, 1.0)
+          affine_sigma = clamp((mu_aff / cur_mu)^3, 0.0, 1.0)
 
           # Corrector step
-          dx_c, dl_c, ds_c = compute_corrector(p_sol, normal_factored_lhs, sigma, affine_dx, affine_ds)
+          dx_c, dlambda_c, ds_c = compute_corrector(p_sol, normal_factored_lhs, affine_sigma, affine_dx, affine_ds)
           dx = affine_dx + dx_c
-          dlambda = affine_dlambda + dl_c
+          dlambda = affine_dlambda + dlambda_c
           ds = affine_ds + ds_c
 
-          alpha_x = alpha_max(p_sol.xs, dx) 
-          alpha_dual = alpha_max(p_sol.s, ds)
+          max_primal_alpha = alpha_max(p_sol.xs, dx, Infinity) 
+          max_dual_alpha = alpha_max(p_sol.s, ds, Infinity)
 
-          alpha_x = min(0.9 * alpha_x, 1.0)
-          alpha_dual = min(0.9 * alpha_dual, 1.0)
+          primal_alpha = min(0.9 * max_primal_alpha, 1.0)
+          dual_alpha = min(0.9 * max_dual_alpha, 1.0)
 
           # Step towards the descent direction
-          p_sol.xs += alpha_x * dx
-          p_sol.lam += alpha_dual * dlambda
-          p_sol.s += alpha_dual * ds
+          p_sol.xs += primal_alpha * dx
+          p_sol.lam += dual_alpha * dlambda
+          p_sol.s += dual_alpha * ds
 
-          @show alpha_x
-          @show alpha_dual
+          @show primal_alpha
+          @show dual_alpha
           @show mu_aff
           @show cur_mu
-          @show sigma
+          @show affine_sigma
 
           # Final correct
 
