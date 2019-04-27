@@ -5,7 +5,7 @@ Src: Primal-Dual-Interior-Point-Method, Page 218, 219
 using LinearAlgebra
 using SparseArrays
 
-const default_tol = 1e-18
+const default_tol = 1e-20
 # Skip small pivots
 function cholesky_skip(M, tol=default_tol)
     m,n = size(M)

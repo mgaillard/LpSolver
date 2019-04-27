@@ -123,6 +123,35 @@ function hpcg_cholesky(M::SparseMatrixCSC{Float64}, cholesky_solver::Function, t
     return cholesky_solver(M, tol)
 end
 
+function compute_corrector(p_sol::IplpSolution, sigma, dx_affine, ds_affine)
+     # Compute the steps 
+     n = length(p_sol.cs)
+     m = size(p_sol.As, 1)
+
+     mu = dot(p_sol.xs, p_sol.s)/n
+     rb = zeros(m)
+     rc = zeros(n)
+     rxs = dx_affine .* ds_affine .- sigma * mu;
+
+     # solve delta_lambda, delta_s, delta_x
+     A = p_sol.As
+     X = Diagonal(vec(p_sol.xs))
+     S = Diagonal(vec(p_sol.s))
+     D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
+     M = (A * D2 * A')
+          
+     # Compute using cholesky
+     b = -rb + A * (-S \ X * rc + S \ rxs)
+     L = hpcg_cholesky(M, cholesky_skip)
+     dlambda = hpcg_cholesky_solve(L, b)
+
+     ds = -rc - A' * dlambda
+     dx = -S\(rxs + X * ds)
+
+     return dx, dlambda, ds
+end
+
+
 function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      # Compute the steps 
      n = length(p_sol.cs)
@@ -145,7 +174,7 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      b = -rb + A * (-S \ X * rc + S \ rxs)
      L = hpcg_cholesky(M, cholesky_skip)
      dlambda = hpcg_cholesky_solve(L, b)
-     # println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
+     println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
 
      ds = -rc - A' * dlambda
      dx = -S\(rxs + X * ds)
@@ -190,6 +219,22 @@ function pick_alpha(p_sol::IplpSolution, dx, dlambda, ds, initial_residual)
      return alpha
 end
 
+function alpha_max(x,dx, hi = 1.0)
+    n = length(x)
+    alpha = 1.0
+
+    for i=1:n
+        if dx[i] < 0
+          a = clamp(-x[i]/dx[i], 0.0, hi)
+          alpha = min(alpha,a)
+        end
+    end
+
+    alpha = clamp(alpha, 0.0, hi)
+
+    return alpha
+end
+
 function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
      # Compute the duality measure
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
@@ -220,6 +265,7 @@ Page 196
 function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterations::Int)
      step = 1
 
+     gamma = 0.01
      # Compute initial residuals
      # Used later when choosing alpha
      initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
@@ -236,29 +282,43 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           
           n = length(p_sol.cs)
           cur_mu = dot(p_sol.xs, p_sol.s)/n
-          cur_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / cur_mu
           
-          alpha = pick_alpha(p_sol, affine_dx, affine_dlambda, affine_ds, cur_residual)
+          alpha_x = alpha_max(p_sol.xs, affine_dx) 
+          alpha_dual = alpha_max(p_sol.s, affine_ds)
+
+          alpha_x = min(0.9 * alpha_x, 1.0)
+          alpha_dual = min(0.9 * alpha_dual, 1.0)
           
-          mu_aff = (p_sol.xs + alpha * affine_dx)' * (p_sol.s + alpha * affine_ds) / n
-          sigma = (mu_aff/cur_mu)^3
-          @show sigma
+          mu_aff = dot(p_sol.xs + alpha_x * affine_dx, p_sol.s + alpha_dual * affine_ds) / n
+               
+          sigma = clamp((mu_aff / cur_mu)^3, 0.0,1.0)
 
-          # Compute adpated sigma for central path algorithm
-          if step % 2 == 0
-               sigma = sigma * 0.5
-          end
+          # corrector
+          dx_c, dl_c, ds_c = compute_corrector(p_sol, sigma, affine_dx, affine_ds)
+          dx = affine_dx + dx_c
+          dlambda = affine_dlambda + dl_c
+          ds = affine_ds + ds_c
 
-          dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+          alpha_x = alpha_max(p_sol.xs, dx) 
+          alpha_dual = alpha_max(p_sol.s, ds)
 
-          # Perform a line search with the constraint that we need to stay in the feasible region
-          alpha = pick_alpha(p_sol, dx, dlambda, ds, cur_residual)
+          alpha_x = min(0.9 * alpha_x, 1.0)
+          alpha_dual = min(0.9 * alpha_dual, 1.0)
 
           # Step towards the descent direction
-          p_sol.xs += alpha * dx
-          p_sol.lam += alpha * dlambda
-          p_sol.s += alpha * ds
-     
+          p_sol.xs += alpha_x * dx
+          p_sol.lam += alpha_dual * dlambda
+          p_sol.s += alpha_dual * ds
+
+          @show alpha_x
+          @show alpha_dual
+          @show mu_aff
+          @show cur_mu
+          @show sigma
+
+          # Final correct
+
+
           step += 1
      end
      
