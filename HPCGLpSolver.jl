@@ -239,7 +239,7 @@ function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
      # Compute the duality measure
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      # Compute the normalized residual
-     residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+     residual = norm([residual_c(p_sol); residual_b(p_sol); p_sol.xs .* p_sol.s]) / norm([p_sol.bs; p_sol.s])
      # End condition
      return (mu <= tolerance) && (residual <= tolerance)
 end
