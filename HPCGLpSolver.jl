@@ -196,14 +196,19 @@ end
 function alpha_max(x, dx, hi = 1.0)
      n = length(x)
      alpha = hi
+     ind = -1
  
      for i=1:n
-         if dx[i] < 0.0
-           alpha = min(alpha, -x[i]/dx[i])
+          if dx[i] < 0.0
+               curr_alpha = -x[i]/dx[i]
+               if curr_alpha < alpha
+                    alpha = curr_alpha
+                    ind = i
+               end
          end
      end
  
-     return alpha
+     return alpha, ind
  end
 
 function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
@@ -249,8 +254,8 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           
           cur_mu = dot(p_sol.xs, p_sol.s)/n
           
-          affine_primal_alpha = alpha_max(p_sol.xs, affine_dx)
-          affine_dual_alpha = alpha_max(p_sol.s, affine_ds)
+          affine_primal_alpha, _ = alpha_max(p_sol.xs, affine_dx)
+          affine_dual_alpha, _ = alpha_max(p_sol.s, affine_ds)
           
           mu_aff = dot(p_sol.xs + affine_primal_alpha * affine_dx, p_sol.s + affine_dual_alpha * affine_ds) / n
                
@@ -262,11 +267,24 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           dlambda = affine_dlambda + dlambda_c
           ds = affine_ds + ds_c
 
-          max_primal_alpha = alpha_max(p_sol.xs, dx, Infinity) 
-          max_dual_alpha = alpha_max(p_sol.s, ds, Infinity)
+          max_primal_alpha, max_primal_alpha_ind = alpha_max(p_sol.xs, dx, Infinity) 
+          max_dual_alpha, max_dual_alpha_ind = alpha_max(p_sol.s, ds, Infinity)
 
+          # Pick alpha in theory
           primal_alpha = min(0.9 * max_primal_alpha, 1.0)
           dual_alpha = min(0.9 * max_dual_alpha, 1.0)
+
+          # Pick alpha in practice (if max_alpha indices are defined we can use the heuristic)
+          if max_primal_alpha_ind >= 0 && max_dual_alpha_ind >= 0
+               gamma_f = 0.05
+               mu_plus = dot(p_sol.xs + max_primal_alpha * affine_dx, p_sol.s + affine_dual_alpha * affine_ds) / n
+
+               f_primal = (((gamma_f * mu_plus) / (p_sol.s[max_primal_alpha_ind] + max_dual_alpha*ds[max_primal_alpha_ind])) - p_sol.xs[max_primal_alpha_ind]) / (max_primal_alpha * dx[max_primal_alpha_ind])
+               f_dual = (((gamma_f * mu_plus) / (p_sol.xs[max_dual_alpha_ind] + max_primal_alpha*dx[max_dual_alpha_ind])) - p_sol.s[max_dual_alpha_ind]) / (max_dual_alpha * ds[max_dual_alpha_ind])
+
+               primal_alpha = max(1.0 - gamma_f, f_primal)*max_primal_alpha
+               dual_alpha = max(1.0 - gamma_f, f_dual)*max_dual_alpha
+          end
 
           # Step towards the descent direction
           p_sol.xs += primal_alpha * dx
@@ -405,9 +423,8 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
      m, n = size(problem.A)
 
      # If the contraint has inequality constraints on x, we reformulate it.
-     # if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
      
-     if length(findall(problem.hi .!= Infinity)) > 0
+     if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
           println("Convert to standard form")
           hi = problem.hi - problem.lo
 
@@ -435,7 +452,6 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
 
      # Solve the problem
-     # standard_solution = interior_point_method(initial_solution, sigma, tolerance, max_iterations)
      standard_solution = predictor_corrector(initial_solution, tolerance, max_iterations)
 
      # Solution is shifted by problem.lo, we need to shift it back
