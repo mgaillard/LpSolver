@@ -8,7 +8,6 @@ using SparseArrays
 include("HPCGCholeskySolver.jl")
 
 const Infinity = 1.0e308
-const is_catch = false
 
 mutable struct IplpProblem
      c::Vector{Float64}
@@ -58,7 +57,10 @@ function residual_b(p_sol::IplpSolution)
      return residual_b(p_sol.As, p_sol.xs, p_sol.bs)
 end
 
-function compute_direction_standard(p_sol::IplpSolution, sigma)
+"""
+Standard form of the step equation
+"""
+function compute_predictor_standard(p_sol::IplpSolution, sigma)
      # Compute the steps 
      n = length(p_sol.cs)
      m = size(p_sol.As, 1)
@@ -86,8 +88,10 @@ function compute_direction_standard(p_sol::IplpSolution, sigma)
      return dx, dlambda, ds
 end
 
-# Second form of the step equation
-function compute_direction_augmented(p_sol::IplpSolution, sigma)
+"""
+Augmented form of the step equation
+"""
+function compute_predictor_augmented(p_sol::IplpSolution, sigma)
      # Compute the steps 
      n = length(p_sol.cs)
      m = size(p_sol.As, 1)
@@ -115,7 +119,8 @@ function compute_direction_augmented(p_sol::IplpSolution, sigma)
      return dx, dlambda, ds
 end
 
-"""HPCG Cholesky
+"""
+HPCG Cholesky
 Given a symmetric semi-positive matrix M, this function computes the factorization form of cholesky
 Return a L matrix
 """
@@ -123,7 +128,59 @@ function hpcg_cholesky(M::SparseMatrixCSC{Float64}, cholesky_solver::Function, t
     return cholesky_solver(M, tol)
 end
 
-function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
+"""
+Return the left-hand side of the step equation in normal form
+Factored using Cholesky
+Return a L matrix
+"""
+function normal_equation_factored(p_sol::IplpSolution)
+     A = p_sol.As
+     X = Diagonal(vec(p_sol.xs))
+     S = Diagonal(vec(p_sol.s))
+     D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
+     M = (A * D2 * A')
+          
+     # Factorization using Cholesky
+     return hpcg_cholesky(M, cholesky_skip)
+end
+
+"""
+Solve the normal form of the step equation with residuals [rb; rc; rxs]
+normal_factored_lhs is the left-hand side of the step equation in normal form
+Use normal_equation_factored(p_sol::IplpSolution) to compute it
+"""
+function solve_normal_equation(p_sol::IplpSolution, normal_factored_lhs, rb, rc, rxs)
+    # Solve delta_lambda, delta_s, delta_x
+    A = p_sol.As
+    X = Diagonal(vec(p_sol.xs))
+    S = Diagonal(vec(p_sol.s))
+    D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
+    M = (A * D2 * A')
+         
+    # Solve using Cholesky
+    b = -rb + A * (-S \ X * rc + S \ rxs)
+    dlambda = hpcg_cholesky_solve(normal_factored_lhs, b)
+
+    ds = -rc - A' * dlambda
+    dx = -S\(rxs + X * ds)
+
+    return dx, dlambda, ds
+end
+
+function compute_corrector(p_sol::IplpSolution, normal_factored_lhs, sigma, dx_affine, ds_affine)
+     # Compute the steps 
+     n = length(p_sol.cs)
+     m = size(p_sol.As, 1)
+
+     mu = dot(p_sol.xs, p_sol.s)/n
+     rb = zeros(m)
+     rc = zeros(n)
+     rxs = dx_affine .* ds_affine .- sigma * mu;
+
+     return solve_normal_equation(p_sol, normal_factored_lhs, rb, rc, rxs)
+end
+
+function compute_predictor(p_sol::IplpSolution, normal_factored_lhs, sigma)
      # Compute the steps 
      n = length(p_sol.cs)
      m = size(p_sol.As, 1)
@@ -133,68 +190,27 @@ function compute_direction_normal_equation(p_sol::IplpSolution, sigma)
      rc = residual_c(p_sol)
      rxs = p_sol.xs .* p_sol.s .- sigma * mu;
 
-     # solve delta_lambda, delta_s, delta_x
-     A = p_sol.As
-     X = Diagonal(vec(p_sol.xs))
-     S = Diagonal(vec(p_sol.s))
-     D2 = Diagonal(vec(p_sol.xs ./ p_sol.s))
-     M = (A * D2 * A')
-          
-     # Compute using cholesky
-     start = time_ns()
-     b = -rb + A * (-S \ X * rc + S \ rxs)
-     L = hpcg_cholesky(M, cholesky_skip)
-     dlambda = hpcg_cholesky_solve(L, b)
-     # println("Spend: ", (time_ns() - start) * 1e-9, "s to compute cholesky")
-
-     ds = -rc - A' * dlambda
-     dx = -S\(rxs + X * ds)
-
-     return dx, dlambda, ds 
+     return solve_normal_equation(p_sol, normal_factored_lhs, rb, rc, rxs)
 end
 
-function check_alpha_condition(p_sol::IplpSolution, dx, dlambda, ds, initial_residual, alpha)
-     # Constants useful for the computation
-     n = length(p_sol.cs)
-     # Beta >= 1
-     beta = 1e7
-     # Gamma in [0, 1]
-     gamma = 1e-7
-
-     # Compute the potential location
-     xs = p_sol.xs + alpha * dx
-     lambda = p_sol.lam + alpha * dlambda
-     s = p_sol.s + alpha * ds
-
-     # Mean of the x_i*s_i coefficients
-     current_mu = dot(p_sol.xs, p_sol.s)/n
-     mu = dot(xs, s)/n
-     rb = residual_b(p_sol.As, xs, p_sol.bs)
-     rc = residual_c(s, p_sol.As, lambda, p_sol.cs)
-
-     return (norm([rb; rc]) > initial_residual*beta*mu
-          || any(xs .< 0)
-          || any(s .< 0)
-          || any((xs.*s) .< gamma*mu)
-          || any(mu .> (1 - 0.01*alpha)*current_mu))
-end
-
-# Choose alpha in [0, 1] IPF algorithm (page 131/310)
-function pick_alpha(p_sol::IplpSolution, dx, dlambda, ds, initial_residual)
-     alpha = 1.0
-     
-     while check_alpha_condition(p_sol, dx, dlambda, ds, initial_residual, alpha)
-          alpha /= 2;
+function alpha_max(x, dx, hi = 1.0)
+     n = length(x)
+     alpha = hi
+ 
+     for i=1:n
+         if dx[i] < 0.0
+           alpha = min(alpha, -x[i]/dx[i])
+         end
      end
-     
+ 
      return alpha
-end
+ end
 
 function check_end_condition(p_sol::IplpSolution, tolerance::Float64)
      # Compute the duality measure
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      # Compute the normalized residual
-     residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+     residual = norm([residual_c(p_sol); residual_b(p_sol); p_sol.xs .* p_sol.s]) / norm([p_sol.bs; p_sol.s])
      # End condition
      return (mu <= tolerance) && (residual <= tolerance)
 end
@@ -205,7 +221,7 @@ function feasibility_diagnostic(p_sol::IplpSolution, tolerance::Float64)
      println("s > 0: ", all(p_sol.s .> 0))
      println("Norm of residual_c: ", norm(residual_c(p_sol)))
      println("Norm of residual_b: ", norm(residual_b(p_sol)))
-     residual = norm([residual_c(p_sol); residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+     residual = norm([residual_c(p_sol); residual_b(p_sol); p_sol.xs .* p_sol.s]) / norm([p_sol.bs; p_sol.s])
      println("Norm of residual: ", residual)
      mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
      println("Mu: ", mu)
@@ -218,119 +234,55 @@ Adaptation of sigma
 Page 196
 """
 function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterations::Int)
+     n = length(p_sol.cs)
+     
      step = 1
-
-     # Compute initial residuals
-     # Used later when choosing alpha
-     initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
-     initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
-
-     # default_sigma = 0.1
      while (step < max_iterations && !check_end_condition(p_sol, tolerance))
           println("Step: ", step)
           feasibility_diagnostic(p_sol, tolerance)
-
-          # Compute affine 
-          # TODO, Make this step faster
-          affine_dx, affine_dlambda, affine_ds = compute_direction_normal_equation(p_sol, 0.0) 
           
-          n = length(p_sol.cs)
+          # Precompute the left-hand side of the step equation in normal form
+          normal_factored_lhs = normal_equation_factored(p_sol)
+
+          # Predictor step
+          affine_dx, affine_dlambda, affine_ds = compute_predictor(p_sol, normal_factored_lhs, 0.0) 
+          
           cur_mu = dot(p_sol.xs, p_sol.s)/n
-          cur_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / cur_mu
           
-          alpha = pick_alpha(p_sol, affine_dx, affine_dlambda, affine_ds, cur_residual)
+          affine_primal_alpha = alpha_max(p_sol.xs, affine_dx)
+          affine_dual_alpha = alpha_max(p_sol.s, affine_ds)
           
-          mu_aff = (p_sol.xs + alpha * affine_dx)' * (p_sol.s + alpha * affine_ds) / n
-          sigma = (mu_aff/cur_mu)^3
-          @show sigma
+          mu_aff = dot(p_sol.xs + affine_primal_alpha * affine_dx, p_sol.s + affine_dual_alpha * affine_ds) / n
+               
+          affine_sigma = clamp((mu_aff / cur_mu)^3, 0.0, 1.0)
 
-          # Compute adpated sigma for central path algorithm
-          if step % 2 == 0
-               sigma = sigma * 0.5
-          end
+          # Corrector step
+          dx_c, dlambda_c, ds_c = compute_corrector(p_sol, normal_factored_lhs, affine_sigma, affine_dx, affine_ds)
+          dx = affine_dx + dx_c
+          dlambda = affine_dlambda + dlambda_c
+          ds = affine_ds + ds_c
 
-          dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
+          max_primal_alpha = alpha_max(p_sol.xs, dx, Infinity) 
+          max_dual_alpha = alpha_max(p_sol.s, ds, Infinity)
 
-          # Perform a line search with the constraint that we need to stay in the feasible region
-          alpha = pick_alpha(p_sol, dx, dlambda, ds, cur_residual)
+          primal_alpha = min(0.9 * max_primal_alpha, 1.0)
+          dual_alpha = min(0.9 * max_dual_alpha, 1.0)
 
           # Step towards the descent direction
-          p_sol.xs += alpha * dx
-          p_sol.lam += alpha * dlambda
-          p_sol.s += alpha * ds
-     
-          step += 1
-     end
-     
-     # Check if the problem is solved
-     # If so, set x and the flag
-     if check_end_condition(p_sol, tolerance)
-          # The solution is xs without the slack variables
-          p_sol.x = p_sol.xs[1:length(p_sol.x)]
-          # Problem solved => flag = true
-          p_sol.flag = true
-     end
+          p_sol.xs += primal_alpha * dx
+          p_sol.lam += dual_alpha * dlambda
+          p_sol.s += dual_alpha * ds
 
-     return p_sol
-end
+          @show primal_alpha
+          @show dual_alpha
+          @show mu_aff
+          @show cur_mu
+          @show affine_sigma
 
-function interior_point_method(p_sol::IplpSolution, sigma::Float64, tolerance::Float64, max_iterations::Int)
-     step = 1
+          # Final correct
 
-     # Compute initial residuals
-     # Used later when choosing alpha
-     initial_mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
-     initial_residual = norm([residual_b(p_sol); residual_c(p_sol)]) / initial_mu
-
-     if is_catch
-          try  
-               while (step < max_iterations && !check_end_condition(p_sol, tolerance))
-                    println("Step: ", step)
-                    feasibility_diagnostic(p_sol, tolerance)
-
-                    # Compute a descent direction biais toward the central path
-                    dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
-                    # dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
-
-                    # Perform a line search with the constraint that we need to stay in the feasible region
-                    alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
-
-                    # Step towards the descent direction
-                    p_sol.xs += alpha * dx
-                    p_sol.lam += alpha * dlambda
-                    p_sol.s += alpha * ds
-               
-                    step += 1
-               end
-          catch e
-               println("An exception happened! ")
-               println(e)
-               frames = stacktrace()
-               for (count,f) in enumerate(frames)
-                    println("[",count, "] ",f)
-               end
-
-               return p_sol
-          end
-     else
-          while (step < max_iterations && !check_end_condition(p_sol, tolerance))
-               println("Step: ", step)
-               feasibility_diagnostic(p_sol, tolerance)
-
-               # Compute a descent direction biais toward the central path
-               dx, dlambda, ds = compute_direction_normal_equation(p_sol, sigma)
-               # dx, dlambda, ds = compute_direction_standard(p_sol, sigma)
-
-               # Perform a line search with the constraint that we need to stay in the feasible region
-               alpha = pick_alpha(p_sol, dx, dlambda, ds, initial_residual)
-
-               # Step towards the descent direction
-               p_sol.xs += alpha * dx
-               p_sol.lam += alpha * dlambda
-               p_sol.s += alpha * ds
           
-               step += 1
-          end
+          step += 1
      end
      
      # Check if the problem is solved
