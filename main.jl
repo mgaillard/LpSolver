@@ -21,7 +21,7 @@ function create_problem(name::String)::HPCGLpSolver.IplpProblem
           hi = [16.0; 16.0; 16.0; 16.0; 16.0]
           return HPCGLpSolver.IplpProblem(c, A, b, lo, hi)
 
-     # Examples from the University of Flordia Sparse Matrix repository
+     # Examples from the University of Florida Sparse Matrix repository
      # URL: http://www.cise.ufl.edu/research/sparse/matrices/LPnetlib
      else
           # List all available matrices: listnames("LPnetlib/*")
