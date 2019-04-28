@@ -10,7 +10,7 @@ function convert_matrixdepot(P::MatrixDepot.MatrixDescriptor)::HPCGLpSolver.Iplp
 end
 
 function feasibility_diagnostic(p_sol::HPCGLpSolver.IplpSolution)
-    residual = norm([HPCGLpSolver.residual_c(p_sol); HPCGLpSolver.residual_b(p_sol)]) / norm([p_sol.bs; p_sol.s])
+    residual = norm([HPCGLpSolver.residual_c(p_sol); HPCGLpSolver.residual_b(p_sol); p_sol.xs .* p_sol.s]) / norm([p_sol.bs; p_sol.s])
     mu = dot(p_sol.xs, p_sol.s) / length(p_sol.xs)
 
     return residual, mu
