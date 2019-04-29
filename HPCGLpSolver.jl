@@ -424,14 +424,18 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
      
      if (any(problem.lo .!= 0.0) || any(problem.hi .< Infinity))
           println("Convert to standard form")
-          hi = problem.hi - problem.lo
 
-          noninf_constraint_indice = findall(hi .!= Infinity)
+          noninf_constraint_indice = findall(problem.hi .< Infinity)
           noninf_hi_num = length(noninf_constraint_indice)
-          noninf_hi = hi[noninf_constraint_indice] 
+          noninf_hi = problem.hi[noninf_constraint_indice] - problem.lo[noninf_constraint_indice]
+
+          # Modify A to take account for the slacks
+          right_block_slacks = Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)
+          left_block_constraints = zeros(noninf_hi_num, n)
+          left_block_constraints[:, noninf_constraint_indice] = identity
           
-          As = [problem.A                zeros(m,noninf_hi_num); 
-               Matrix{Float64}(I, noninf_hi_num, n)  Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)]
+          As = [problem.A               zeros(m, noninf_hi_num); 
+                left_block_constraints  right_block_slacks]
           bs = [problem.b - problem.A * problem.lo; noninf_hi]
           cs = [problem.c; zeros(noninf_hi_num)]
      else
