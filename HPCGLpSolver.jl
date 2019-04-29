@@ -412,7 +412,7 @@ the duality measure (xs'*s)/n <= tol and the normalized residual
 norm([As'*lam + s - cs; As*xs - bs; xs.*s])/norm([bs;cs]) <= tol
 and fails if this takes more than maxit iterations.
 """
-function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::IplpSolution
+function iplp(problem::IplpProblem, tolerance::Float64; maxit=100)::IplpSolution
      sigma = 0.5
 
      # Remove rows of A and b populated only with zeros.
@@ -454,7 +454,7 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
      initial_solution = IplpSolution(x, false, cs, As, bs, xs, lam, s)
 
      # Solve the problem
-     standard_solution = predictor_corrector(initial_solution, tolerance, max_iterations)
+     standard_solution = predictor_corrector(initial_solution, tolerance, maxit)
 
      # Solution is shifted by problem.lo, we need to shift it back
      standard_solution.x = standard_solution.x[1:n] + problem.lo

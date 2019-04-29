@@ -40,7 +40,7 @@ tol = 1e-8
 problem = create_problem(prob_name)
 
 # Solve
-solution = HPCGLpSolver.iplp(problem, tol; max_iterations=100)
+solution = HPCGLpSolver.iplp(problem, tol; maxit=100)
 
 # Display the solution
 if solution.flag
