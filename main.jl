@@ -35,11 +35,8 @@ function create_problem(name::String)::HPCGLpSolver.IplpProblem
 end
 
 # Problem definition
-prob_name =  "LPnetlib/lp_fit1d"
-
-tol = 1e-5
-
-# problem = create_problem("LPnetlib/lp_25fv47")
+prob_name =  "LPnetlib/lp_afiro"
+tol = 1e-8
 problem = create_problem(prob_name)
 
 # Solve
