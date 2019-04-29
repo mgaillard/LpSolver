@@ -286,8 +286,8 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           end
 
           # Step towards the descent direction
-          primal_alpha = clamp(primal_alpha, 0.0,1.0)
-          dual_alpha = clamp(dual_alpha, 0.0,1.0)
+          primal_alpha = clamp(primal_alpha, 0.0, 1.0)
+          dual_alpha = clamp(dual_alpha, 0.0, 1.0)
           p_sol.xs += primal_alpha * dx
           p_sol.lam += dual_alpha * dlambda
           p_sol.s += dual_alpha * ds
