@@ -60,8 +60,7 @@ SRC: https://www.cs.purdue.edu/homes/dgleich/cs520-2019/project.html
 """
 function test_problems()
      problem_folder = "LPnetlib/"
-     # problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
-     problem_sets = ["lp_ganges"] # TODO, "lpi_chemcom"
+     problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
 
      success_problem = []
      failed_problem = []
@@ -69,7 +68,7 @@ function test_problems()
      final_resiual = Dict()
      final_mu = Dict()
      timing_list = Dict()
-     tol = 1e-2
+     tol = 1e-4
      for p_str in problem_sets
         println("Current problem " * p_str)
         problem_name = problem_folder * p_str
@@ -100,7 +99,7 @@ function test_problems()
     println(failed_problem)
     println("Difference w.r.t reference: ")
     for (key, value) in diff_reference
-        @printf("Problem: %10s \t Diff: %10f \t Res: %10.12f \t Mu: %10.12f \t Time: %10f \n", key, value, final_resiual[key], final_mu[key], timing_list[key] * 1e-9)        
+        @printf("Problem: %10s \t Diff: %10e \t Res: %10.12f \t Mu: %10.12f \t Time: %10f \n", key, value, final_resiual[key], final_mu[key], timing_list[key] * 1e-9)        
     end
     println()
 
