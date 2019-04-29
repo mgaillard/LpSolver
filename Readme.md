@@ -59,41 +59,18 @@ This software has been developed for the [CS-520: Computational Optimization](ht
 
 ## Future work
 
-- Check feasible before solving
+- Check feasible before solving in predictor-corrector method
 - Try the first form, use Ldlt
 - Better alpha picking
 - Better predictor 
 
 ## Testing
-We test our algorithm on the problems from the University of Flordia Sparse Matrix repository.
+To see sample testing, please run: 
 
-**tol = 1e-7**
+```
+julia HPCGLpSolver_Test.jl
+```
 
-| Problem name  |     Sucess    |     Res           |       Mu                  | Iteration |
-| ------------- | ------------- |------------       | ---------------           | --------- |
-| lp_afiro      | &#x2611;      |0.000000000111     | 0.000000016570            | N/A       |
-| lp_brandy     | &#x2611;      |0.000000022079     | 0.000000071644            | N/A       |
-| lp_adlittle   | &#x2611;      |0.000000000000     | 0.000000097575            | N/A       |
-| lp_agg        | &#x2611;      |0.000000096385     | 0.000000027158            | N/A       |
-| lp_stocfor1   | &#x2611;      |0.000000000001     | 0.000000078902            | N/A       |
-| lp_fit1d      | &#x2612;      |0.675714541101     | 142.660889550226          | N/A       |
-| lp_25fv47     | &#x2612;      |1.109278128352     | 0.000000000000            | N/A       |
-| lp_ganges     | &#x2612;      |0.5622249587237997 | 4.1857702837761206e-5     | N/A       |
-| lpi_chemcom   | &#x2612;      |0.5                | 0.5                       | N/A       |
-
-**tol = 1e-8** (lp_agg: res: 0.0002655672471816056, mu: 1.2568445145305518e-21)
-
-| Problem name  |     Sucess    |
-| ------------- | ------------- |
-| lp_afiro      | &#x2611;      |
-| lp_brandy     | &#x2611;      |
-| lp_adlittle   | &#x2611;      |
-| lp_agg        | &#x2612;      |
-| lp_stocfor1   | &#x2611;      |
-| lp_fit1d      | &#x2612;      |
-| lp_25fv47     | &#x2612;      |
-| lp_ganges     | &#x2612;      |
-| lpi_chemcom   | &#x2612;      |
 
 ## Licence
 See the LICENSE file.

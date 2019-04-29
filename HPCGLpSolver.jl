@@ -1,6 +1,5 @@
 module HPCGLpSolver
 
-using Convex
 using Plots
 using LinearAlgebra
 using SparseArrays
@@ -291,14 +290,11 @@ function predictor_corrector(p_sol::IplpSolution, tolerance::Float64, max_iterat
           p_sol.lam += dual_alpha * dlambda
           p_sol.s += dual_alpha * ds
 
-          @show primal_alpha
-          @show dual_alpha
-          @show mu_aff
-          @show cur_mu
-          @show affine_sigma
-
-          # Final correct
-
+          # @show primal_alpha
+          # @show dual_alpha
+          # @show mu_aff
+          # @show cur_mu
+          # @show affine_sigma
           
           step += 1
      end
@@ -433,7 +429,7 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
           noninf_hi = hi[noninf_constraint_indice] 
           
           As = [problem.A                zeros(m,noninf_hi_num); 
-                zeros(noninf_hi_num, n)  Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)]
+               Matrix{Float64}(I, noninf_hi_num, n)  Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)]
           bs = [problem.b - problem.A * problem.lo; noninf_hi]
           cs = [problem.c; zeros(noninf_hi_num)]
      else
