@@ -71,7 +71,7 @@ To see sample testing, please run:
 julia HPCGLpSolver_Test.jl
 ```
 
-For specific problem, please change the problem, tweak the parameters in main, and run:
+For specific problem, please change the prob_name variable, tweak the parameters in main.jl, and run:
 ```
 julia main.jl
 ```
