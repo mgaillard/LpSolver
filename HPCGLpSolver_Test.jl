@@ -60,8 +60,8 @@ SRC: https://www.cs.purdue.edu/homes/dgleich/cs520-2019/project.html
 """
 function test_problems()
      problem_folder = "LPnetlib/"
-     problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
-     # problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle",              "lp_agg",               "lp_stocfor1"            ] # TODO, "lpi_chemcom"
+     # problem_sets = ["lp_afiro", "lp_brandy", "lp_adlittle","lp_fit1d", "lp_agg", "lp_ganges", "lp_stocfor1", "lp_25fv47"] # TODO, "lpi_chemcom"
+     problem_sets = ["lp_ganges"] # TODO, "lpi_chemcom"
 
      success_problem = []
      failed_problem = []
@@ -69,13 +69,14 @@ function test_problems()
      final_resiual = Dict()
      final_mu = Dict()
      timing_list = Dict()
+     tol = 1e-2
      for p_str in problem_sets
         println("Current problem " * p_str)
         problem_name = problem_folder * p_str
         problem = create_problem(problem_name)
         
         start = time_ns()
-        solution = HPCGLpSolver.iplp(problem, 1e-4; max_iterations=100)
+        solution = HPCGLpSolver.iplp(problem, tol; max_iterations=100)
         elapsed = time_ns() - start
         timing_list[p_str] = elapsed
         
@@ -92,6 +93,7 @@ function test_problems()
      end
 
     println("************************* Final Test Results *************************")
+    @show tol
     println("Sucess problems: ")
     println(success_problem)
     println("Failed problems: ")

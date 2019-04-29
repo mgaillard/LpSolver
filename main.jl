@@ -35,10 +35,15 @@ function create_problem(name::String)::HPCGLpSolver.IplpProblem
 end
 
 # Problem definition
-problem = create_problem("LPnetlib/lp_afiro")
+prob_name =  "LPnetlib/lp_fit1d"
+
+tol = 1e-5
+
+# problem = create_problem("LPnetlib/lp_25fv47")
+problem = create_problem(prob_name)
 
 # Solve
-solution = HPCGLpSolver.iplp(problem, 1e-7; max_iterations=100)
+solution = HPCGLpSolver.iplp(problem, tol; max_iterations=100)
 
 # Display the solution
 if solution.flag
@@ -47,5 +52,7 @@ else
      println("Solution not found")
 end
 
+@show prob_name
+@show tol
 println(solution.x)
 println("Optimal value: ", problem.c' * solution.x)
