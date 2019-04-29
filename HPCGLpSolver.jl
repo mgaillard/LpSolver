@@ -432,7 +432,7 @@ function iplp(problem::IplpProblem, tolerance::Float64; max_iterations=100)::Ipl
           # Modify A to take account for the slacks
           right_block_slacks = Matrix{Float64}(I, noninf_hi_num, noninf_hi_num)
           left_block_constraints = zeros(noninf_hi_num, n)
-          left_block_constraints[:, noninf_constraint_indice] = identity
+          left_block_constraints[:, noninf_constraint_indice] = right_block_slacks
           
           As = [problem.A               zeros(m, noninf_hi_num); 
                 left_block_constraints  right_block_slacks]
